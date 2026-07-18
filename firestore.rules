@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Owner has full access to their own tree
+    match /owners/{ownerId}/{document=**} {
+      allow read, write: if request.auth.uid == ownerId;
+    }
+
+    // Employee can read/write runs under their owner (must be an active employee)
+    match /owners/{ownerId}/runs/{runId} {
+      allow read, write: if
+        exists(/databases/$(database)/documents/owners/$(ownerId)/employees/$(request.auth.uid))
+        && get(/databases/$(database)/documents/owners/$(ownerId)/employees/$(request.auth.uid)).data.active == true;
+    }
+
+    match /owners/{ownerId}/stores/{storeId} {
+      allow read: if
+        exists(/databases/$(database)/documents/owners/$(ownerId)/employees/$(request.auth.uid));
+    }
+
+    match /owners/{ownerId}/stores/{storeId}/machines/{machineId} {
+      allow read: if
+        exists(/databases/$(database)/documents/owners/$(ownerId)/employees/$(request.auth.uid));
+    }
+
+    // Employee index — employee reads own record only; owner writes via Admin panel
+    match /employeeIndex/{uid} {
+      allow read: if request.auth.uid == uid
+        || (resource.data.ownerId is string && request.auth.uid == resource.data.ownerId);
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.role == 'employee';
+      allow update: if request.auth != null
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

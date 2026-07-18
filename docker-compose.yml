@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web-dev:
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      - EXPO_PUBLIC_BACKEND=local
+    volumes:
+      - .:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true

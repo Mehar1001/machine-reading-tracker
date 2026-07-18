@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Machine Reading Tracker",
+    "slug": "machine-reading-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "machinetracker",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0F0F0F"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mehar1001.machinetracker",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to photograph machine meter readings.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to attach machine reading images."
+      }
+    },
+    "android": {
+      "package": "com.mehar1001.machinetracker",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Machine Reading Tracker to use the camera to capture meter readings."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

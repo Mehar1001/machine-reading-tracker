@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isOwner(ownerId) {
+      return request.auth != null && request.auth.uid == ownerId;
+    }
+
+    function isActiveEmployee(ownerId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/owners/$(ownerId)/employees/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/owners/$(ownerId)/employees/$(request.auth.uid)).data.active == true;
+    }
+
+    match /machinePhotos/{ownerId}/{storeId}/{runId}/{fileName} {
+      allow read: if isOwner(ownerId) || isActiveEmployee(ownerId);
+      allow write: if isOwner(ownerId) || isActiveEmployee(ownerId);
+    }
+  }
+}
