@@ -150,7 +150,7 @@ export default function RunResults() {
                   <Text style={[styles.cell, styles.cMachine]}>{m.label}</Text>
                   <Text style={[styles.cell, styles.cNum, { color: colors.success }]}>{money(m.lastIn)}</Text>
                   <Text style={[styles.cell, styles.cNum, { color: colors.danger }]}>{money(m.lastOut)}</Text>
-                  <Text style={[styles.cell, styles.cNum, { color: colors.goldDark }]}>{money(m.lastIn - m.lastOut)}</Text>
+                  <Text style={[styles.cell, styles.cNum, { color: colors.goldDark }]}>{money(m.lastOut - m.lastIn)}</Text>
                 </View>
               );
             })
@@ -168,7 +168,7 @@ export default function RunResults() {
           </View>
           {machineIds.map((id, i) => {
             const m = run.machines[id];
-            const net = m.newIn - m.newOut;
+            const net = m.netMachine;
             return (
               <View key={id} style={[styles.tRow, i % 2 === 1 && styles.tRowAlt]}>
                 <Text style={[styles.cell, styles.cMachine]}>{m.label}</Text>

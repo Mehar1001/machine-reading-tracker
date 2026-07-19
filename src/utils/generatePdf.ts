@@ -10,14 +10,14 @@ function buildHtml(run: Run): string {
   const lastRows = machineIds
     .map((id) => {
       const m = run.machines[id];
-      return `<tr><td>${m.label}</td><td>${money(m.lastIn)}</td><td>${money(m.lastOut)}</td><td>${money(m.lastIn - m.lastOut)}</td></tr>`;
+      return `<tr><td>${m.label}</td><td>${money(m.lastIn)}</td><td>${money(m.lastOut)}</td><td>${money(m.lastOut - m.lastIn)}</td></tr>`;
     })
     .join('');
 
   const presentRows = machineIds
     .map((id) => {
       const m = run.machines[id];
-      const net = m.newIn - m.newOut;
+      const net = m.netMachine;
       const cls = net >= 0 ? 'positive' : 'negative';
       return `<tr><td>${m.label}</td><td>${money(m.presentIn)}</td><td>${money(m.presentOut)}</td><td class="${cls}">${money(net)}</td></tr>`;
     })

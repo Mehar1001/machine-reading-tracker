@@ -5,6 +5,7 @@ import type {
   Backend,
   CreateEmployeeInput,
   CreateMachineInput,
+  CreateOwnerInput,
   CreateRunInput,
   CreateStoreInput,
   Employee,
@@ -39,8 +40,6 @@ function nextCode(prefix: string, existing: string[]): string {
 }
 
 // ─── Seed identities ─────────────────────────────────────────
-const OWNER_ID = 'owner_demo';
-
 interface Credential {
   uid: string;
   email: string;
@@ -51,9 +50,7 @@ interface Credential {
   active: boolean;
 }
 
-const credentials: Credential[] = [
-  { uid: OWNER_ID, email: 'owner@demo.com', password: 'owner123', name: 'Demo Owner', role: 'owner', ownerId: OWNER_ID, active: true },
-];
+const credentials: Credential[] = [];
 
 // ─── In-memory tables (keyed by ownerId) ─────────────────────
 interface OwnerData {
@@ -64,10 +61,8 @@ interface OwnerData {
 }
 
 function buildSeed(): Record<string, OwnerData> {
-  // Start with a clean, empty tenant so the owner creates the first store and machines.
-  return {
-    [OWNER_ID]: { stores: [], machines: {}, employees: [], runs: [] },
-  };
+  // Real working app: start empty; owner signs up and creates stores/machines.
+  return {};
 }
 
 const db: Record<string, OwnerData> = buildSeed();
@@ -98,6 +93,31 @@ export const localAdapter: Backend = {
       email: cred.email,
       role: cred.role,
     };
+    return user;
+  },
+
+  async registerOwner(input: CreateOwnerInput) {
+    await delay();
+    const existing = credentials.find((c) => c.email.toLowerCase() === input.email.trim().toLowerCase());
+    if (existing) throw new Error('Email already in use.');
+    const ownerId = genId('owner');
+    const user: SessionUser = {
+      ownerId,
+      uid: ownerId,
+      name: input.name.trim(),
+      email: input.email.trim(),
+      role: 'owner',
+    };
+    credentials.push({
+      uid: ownerId,
+      email: user.email,
+      password: input.password,
+      name: user.name,
+      role: 'owner',
+      ownerId,
+      active: true,
+    });
+    ownerData(ownerId); // create empty data tree
     return user;
   },
 
@@ -294,11 +314,11 @@ export const localAdapter: Backend = {
         lastOut,
         newIn,
         newOut,
-        netMachine: newIn - newOut,
+        netMachine: newOut - newIn,
         photoUrl: m.photoUrl,
       };
     });
-    const netTotal = totalNewIn - totalNewOut;
+    const netTotal = totalNewOut - totalNewIn;
     const now = Date.now();
     const run: Run = {
       id: genId('run'),

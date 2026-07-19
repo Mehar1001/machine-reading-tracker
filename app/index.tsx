@@ -79,6 +79,10 @@ export default function Home() {
           onPress={() => router.push({ pathname: '/(auth)/employee-login', params: { role: selected } })}
           style={styles.continue}
         />
+
+        <TouchableOpacity onPress={() => router.push('/(auth)/owner-signup' as any)} style={styles.signUpLink}>
+          <Text style={styles.signUpText}>Create owner account</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -130,4 +134,6 @@ const styles = StyleSheet.create({
   optionTextActive: { color: colors.primary },
   optionSub: { color: colors.subtext, fontSize: 10, textAlign: 'center' },
   continue: { marginTop: space.sm },
+  signUpLink: { alignItems: 'center', marginTop: space.md },
+  signUpText: { color: colors.primary, fontSize: font.sm, fontWeight: '600' },
 });

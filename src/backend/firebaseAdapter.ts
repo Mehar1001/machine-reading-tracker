@@ -25,6 +25,7 @@ import type {
   Backend,
   CreateEmployeeInput,
   CreateMachineInput,
+  CreateOwnerInput,
   CreateRunInput,
   CreateStoreInput,
   Employee,
@@ -213,6 +214,10 @@ export const firebaseAdapter: Backend = {
   async logout() {
     const { auth } = getFirebaseServices();
     await signOut(auth);
+  },
+
+  async registerOwner(input: CreateOwnerInput) {
+    throw new Error('Owner self-registration is not implemented for Firebase. Create the owner account via the Firebase console or a Cloud Function.');
   },
 
   async getStores(ownerId) {
@@ -418,7 +423,7 @@ export const firebaseAdapter: Backend = {
           lastOut,
           newIn,
           newOut,
-          netMachine: newIn - newOut,
+          netMachine: newOut - newIn,
           photoUrl,
         };
         return [machine.machineId, runMachine] as const;
@@ -428,7 +433,7 @@ export const firebaseAdapter: Backend = {
     const machines = Object.fromEntries(machineEntries);
     const totalNewIn = Object.values(machines).reduce((sum, machine) => sum + machine.newIn, 0);
     const totalNewOut = Object.values(machines).reduce((sum, machine) => sum + machine.newOut, 0);
-    const netTotal = totalNewIn - totalNewOut;
+    const netTotal = totalNewOut - totalNewIn;
 
     const payload = {
       storeId: input.storeId,

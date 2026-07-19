@@ -131,6 +131,12 @@ export interface CreateEmployeeInput {
   password: string;
 }
 
+export interface CreateOwnerInput {
+  name: string;
+  email: string;
+  password: string;
+}
+
 export interface RunFilters {
   storeId?: string;
   employeeUid?: string;
@@ -145,6 +151,7 @@ export interface RunFilters {
 export interface Backend {
   // auth
   login(email: string, password: string): Promise<SessionUser>;
+  registerOwner(input: CreateOwnerInput): Promise<SessionUser>;
   logout(): Promise<void>;
 
   // stores

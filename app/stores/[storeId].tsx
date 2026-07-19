@@ -20,9 +20,9 @@ import type { Store, Machine, Run } from '@/backend/types';
 import { useSession } from '@/context/SessionContext';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import GoldButton from '@/components/ui/GoldButton';
-import EmptyState from '@/components/ui/EmptyState';
+import CurrencyInput from '@/components/ui/CurrencyInput';
 import { colors, font, space, radius } from '@/constants/theme';
-import { money, toNumber, moneyInput, toDateKey } from '@/utils/format';
+import { money, toNumber, toDateKey } from '@/utils/format';
 
 interface RowState {
   machine: Machine;
@@ -58,8 +58,8 @@ export default function StoreDetail() {
     setRows(
       machines.map((m) => ({
         machine: m,
-        in: moneyInput(String(last?.machines[m.id]?.presentIn ?? m.initialIn ?? 0)),
-        out: moneyInput(String(last?.machines[m.id]?.presentOut ?? m.initialOut ?? 0)),
+        in: String(last?.machines[m.id]?.presentIn ?? m.initialIn ?? 0),
+        out: String(last?.machines[m.id]?.presentOut ?? m.initialOut ?? 0),
         photo: null,
       }))
     );
@@ -74,12 +74,11 @@ export default function StoreDetail() {
 
   const rowComputations = useMemo(() => {
     return rows.map((r) => {
-      // Cumulative meter-reading semantics: current reading - previous reading = new amount this run.
       const prevIn = lastRun?.machines[r.machine.id]?.presentIn ?? r.machine.initialIn ?? 0;
       const prevOut = lastRun?.machines[r.machine.id]?.presentOut ?? r.machine.initialOut ?? 0;
       const newIn = toNumber(r.in) - prevIn;
       const newOut = toNumber(r.out) - prevOut;
-      return { ...r, prevIn, prevOut, newIn, newOut, netMachine: newIn - newOut };
+      return { ...r, prevIn, prevOut, newIn, newOut, netMachine: newOut - newIn };
     });
   }, [rows, lastRun]);
 
@@ -90,11 +89,11 @@ export default function StoreDetail() {
       totalNewIn += r.newIn;
       totalNewOut += r.newOut;
     });
-    return { totalNewIn, totalNewOut, net: totalNewIn - totalNewOut };
+    return { totalNewIn, totalNewOut, net: totalNewOut - totalNewIn };
   }, [rowComputations]);
 
   const updateRow = (id: string, key: 'in' | 'out', value: string) => {
-    setRows((prev) => prev.map((r) => (r.machine.id === id ? { ...r, [key]: moneyInput(value) } : r)));
+    setRows((prev) => prev.map((r) => (r.machine.id === id ? { ...r, [key]: value } : r)));
   };
 
   const takePhoto = async (id: string) => {
@@ -208,7 +207,7 @@ export default function StoreDetail() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScreenHeader title={store?.name ?? 'Store'} showBack rightIcon="settings-outline" />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 320 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 360 }} showsVerticalScrollIndicator={false}>
         {/* Store info card (collapsible) */}
         <TouchableOpacity activeOpacity={0.9} onPress={() => setCollapsed((c) => !c)} style={styles.infoCard}>
           <View style={styles.infoMain}>
@@ -257,71 +256,70 @@ export default function StoreDetail() {
         <Text style={styles.sectionTitle}>Voucher entry</Text>
 
         {rows.length === 0 ? (
-          <EmptyState
-            icon="hardware-chip-outline"
-            title="No machines yet"
-            subtitle="Add machines in Manage stores before entering vouchers."
-          />
+          <View style={styles.emptyCard}>
+            <Ionicons name="hardware-chip-outline" size={40} color={colors.cardBorder} />
+            <Text style={styles.emptyTitle}>No machines yet</Text>
+            <Text style={styles.emptySubtitle}>Add machines in Manage stores before entering vouchers.</Text>
+          </View>
         ) : (
           rowComputations.map((r) => (
-          <View key={r.machine.id} style={styles.machineCard}>
-            <View style={styles.machineHeader}>
-              <View style={styles.machineMeta}>
-                <Text style={styles.machineCode}>{r.machine.code}</Text>
-                <Text style={styles.machineLabel}>{r.machine.label}</Text>
+            <View key={r.machine.id} style={styles.machineCard}>
+              <View style={styles.machineHeader}>
+                <View style={styles.machineMeta}>
+                  <Text style={styles.machineCode}>{r.machine.code}</Text>
+                  <Text style={styles.machineLabel}>{r.machine.label}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.photoBtn, !!r.photo && styles.photoActive]}
+                  onPress={() => takePhoto(r.machine.id)}
+                >
+                  {r.photo ? (
+                    <Image source={{ uri: r.photo }} style={styles.thumb} />
+                  ) : (
+                    <Ionicons name="camera-outline" size={18} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.photoBtn, !!r.photo && styles.photoActive]}
-                onPress={() => takePhoto(r.machine.id)}
-              >
-                {r.photo ? (
-                  <Image source={{ uri: r.photo }} style={styles.thumb} />
-                ) : (
-                  <Ionicons name="camera-outline" size={18} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.previousRow}>
-              <Text style={styles.previousLabel}>
-                Previous IN: <Text style={styles.previousValue}>{money(r.prevIn)}</Text>
-              </Text>
-              <Text style={styles.previousLabel}>
-                Previous OUT: <Text style={styles.previousValue}>{money(r.prevOut)}</Text>
-              </Text>
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Voucher IN</Text>
-                <TextInput
-                  value={r.in}
-                  onChangeText={(v) => updateRow(r.machine.id, 'in', v)}
-                  keyboardType="decimal-pad"
-                  placeholder="$0.00"
-                  placeholderTextColor={colors.subtext}
-                  style={[styles.cellInput, { borderColor: colors.success }]}
-                />
-              </View>
-              <View style={styles.inputWrap}>
-                <Text style={styles.inputLabel}>Voucher OUT</Text>
-                <TextInput
-                  value={r.out}
-                  onChangeText={(v) => updateRow(r.machine.id, 'out', v)}
-                  keyboardType="decimal-pad"
-                  placeholder="$0.00"
-                  placeholderTextColor={colors.subtext}
-                  style={[styles.cellInput, { borderColor: colors.danger }]}
-                />
-              </View>
-              <View style={[styles.netBox, r.netMachine >= 0 ? styles.netBoxPos : styles.netBoxNeg]}>
-                <Text style={styles.netLabel}>Net</Text>
-                <Text style={[styles.netValue, r.netMachine >= 0 ? styles.netValuePos : styles.netValueNeg]}>
-                  {money(r.netMachine)}
+              <View style={styles.previousRow}>
+                <Text style={styles.previousLabel}>
+                  Previous IN: <Text style={styles.previousValue}>{money(r.prevIn)}</Text>
+                </Text>
+                <Text style={styles.previousLabel}>
+                  Previous OUT: <Text style={styles.previousValue}>{money(r.prevOut)}</Text>
                 </Text>
               </View>
+
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.tableHeaderCell, styles.inputWrap]}>VOUCHER IN</Text>
+                <Text style={[styles.tableHeaderCell, styles.inputWrap]}>VOUCHER OUT</Text>
+                <Text style={[styles.tableHeaderCell, styles.netBoxHeader]}>NET</Text>
+              </View>
+
+              <View style={styles.inputRow}>
+                <View style={styles.inputWrap}>
+                  <CurrencyInput
+                    value={r.in}
+                    onChangeValue={(v) => updateRow(r.machine.id, 'in', v)}
+                    placeholder="$0.00"
+                    borderColor={colors.success}
+                  />
+                </View>
+                <View style={styles.inputWrap}>
+                  <CurrencyInput
+                    value={r.out}
+                    onChangeValue={(v) => updateRow(r.machine.id, 'out', v)}
+                    placeholder="$0.00"
+                    borderColor={colors.danger}
+                  />
+                </View>
+                <View style={[styles.netBox, r.netMachine >= 0 ? styles.netBoxPos : styles.netBoxNeg]}>
+                  <Text style={[styles.netValue, r.netMachine >= 0 ? styles.netValuePos : styles.netValueNeg]}>
+                    {money(r.netMachine)}
+                  </Text>
+                </View>
+              </View>
             </View>
-          </View>
           ))
         )}
       </ScrollView>
@@ -440,9 +438,11 @@ const styles = StyleSheet.create({
   previousRow: { flexDirection: 'row', gap: space.md, marginBottom: 8 },
   previousLabel: { color: colors.subtext, fontSize: font.xs },
   previousValue: { color: colors.text, fontWeight: '600' },
-  inputRow: { flexDirection: 'row', gap: space.sm },
+  inputRow: { flexDirection: 'row', gap: space.sm, alignItems: 'stretch' },
+  tableHeaderRow: { flexDirection: 'row', gap: space.sm, marginBottom: 4, paddingHorizontal: 2 },
+  tableHeaderCell: { color: colors.subtext, fontSize: font.xs, fontWeight: '700', textAlign: 'center' },
+  netBoxHeader: { width: 72, textAlign: 'center' },
   inputWrap: { flex: 1 },
-  inputLabel: { color: colors.subtext, fontSize: font.xs, marginBottom: 4 },
   cellInput: {
     height: 44,
     backgroundColor: colors.inputBg,
@@ -462,10 +462,20 @@ const styles = StyleSheet.create({
   },
   netBoxPos: { backgroundColor: colors.positiveBadge },
   netBoxNeg: { backgroundColor: colors.negativeBadge },
-  netLabel: { color: colors.subtext, fontSize: font.xs, fontWeight: '700' },
-  netValue: { fontSize: font.sm, fontWeight: '800', marginTop: 2 },
+  netValue: { fontSize: font.sm, fontWeight: '800' },
   netValuePos: { color: colors.success },
   netValueNeg: { color: colors.danger },
+  emptyCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: space.lg,
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  emptyTitle: { color: colors.text, fontSize: font.md, fontWeight: '600', marginTop: space.md },
+  emptySubtitle: { color: colors.subtext, fontSize: font.sm, textAlign: 'center', marginTop: space.xs },
   photoBtn: {
     width: 40,
     height: 40,

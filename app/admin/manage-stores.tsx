@@ -9,6 +9,7 @@ import { useSession } from '@/context/SessionContext';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import GoldButton from '@/components/ui/GoldButton';
 import EmptyState from '@/components/ui/EmptyState';
+import CurrencyInput from '@/components/ui/CurrencyInput';
 import { colors, font, space, radius } from '@/constants/theme';
 import { numericInput } from '@/utils/format';
 
@@ -237,11 +238,11 @@ export default function ManageStores() {
             <View style={styles.initialRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>INITIAL IN</Text>
-                <TextInput value={mInitialIn} onChangeText={(v) => setMInitialIn(numericInput(v))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.subtext} style={styles.input} />
+                <CurrencyInput value={mInitialIn} onChangeValue={setMInitialIn} placeholder="$0.00" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>INITIAL OUT</Text>
-                <TextInput value={mInitialOut} onChangeText={(v) => setMInitialOut(numericInput(v))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={colors.subtext} style={styles.input} />
+                <CurrencyInput value={mInitialOut} onChangeValue={setMInitialOut} placeholder="$0.00" />
               </View>
             </View>
             <GoldButton label="Add" icon="checkmark" onPress={saveMachine} style={{ marginTop: space.md }} />
