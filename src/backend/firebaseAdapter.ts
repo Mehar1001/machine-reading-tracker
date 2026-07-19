@@ -138,6 +138,11 @@ function runFromDoc(snapshot: QueryDocumentSnapshot<DocumentData>): Run {
     vendorCalculatedAmount: data.vendorCalculatedAmount,
     submittedAt: data.submittedAt ? millis(data.submittedAt) : undefined,
     notes: data.notes,
+    visitNumber: Number(data.visitNumber ?? 0),
+    createdAt: data.createdAt ? millis(data.createdAt) : millis(data.timestamp),
+    updatedAt: data.updatedAt ? millis(data.updatedAt) : millis(data.timestamp),
+    printedAt: data.printedAt ? millis(data.printedAt) : undefined,
+    printStatus: data.printStatus,
   };
 }
 
@@ -423,7 +428,7 @@ export const firebaseAdapter: Backend = {
           lastOut,
           newIn,
           newOut,
-          netMachine: newOut - newIn,
+          netMachine: newIn - newOut,
           photoUrl,
         };
         return [machine.machineId, runMachine] as const;
@@ -433,7 +438,7 @@ export const firebaseAdapter: Backend = {
     const machines = Object.fromEntries(machineEntries);
     const totalNewIn = Object.values(machines).reduce((sum, machine) => sum + machine.newIn, 0);
     const totalNewOut = Object.values(machines).reduce((sum, machine) => sum + machine.newOut, 0);
-    const netTotal = totalNewOut - totalNewIn;
+    const netTotal = totalNewIn - totalNewOut;
 
     const payload = {
       storeId: input.storeId,
@@ -449,6 +454,10 @@ export const firebaseAdapter: Backend = {
       totalNewOut,
       netTotal,
       isPositive: netTotal >= 0,
+      visitNumber: 1,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      printStatus: 'pending' as const,
     };
 
     await setDoc(runRef, payload);
@@ -456,7 +465,9 @@ export const firebaseAdapter: Backend = {
       id: runRef.id,
       ...payload,
       timestamp: timestamp.toMillis(),
-      status: 'open',
+      createdAt: timestamp.toMillis(),
+      updatedAt: timestamp.toMillis(),
+      status: 'open' as const,
     };
   },
 
@@ -512,5 +523,25 @@ export const firebaseAdapter: Backend = {
   async deleteRun(ownerId, runId) {
     const { db } = getFirebaseServices();
     await deleteDoc(doc(db, 'owners', ownerId, 'runs', runId));
+  },
+
+  async printRun(ownerId, runId) {
+    // Placeholder for the production adapter: printing is driven by the local PDF generator in this build.
+    const { db } = getFirebaseServices();
+    const snap = await getDoc(doc(db, 'owners', ownerId, 'runs', runId));
+    if (!snap.exists()) return null;
+    const run = runFromDoc(snap as QueryDocumentSnapshot<DocumentData>);
+    const timestamp = Timestamp.now();
+    await updateDoc(doc(db, 'owners', ownerId, 'runs', runId), {
+      printedAt: timestamp,
+      printStatus: run.printStatus === 'printed' ? 'reprinted' : 'printed',
+      updatedAt: timestamp,
+    });
+    return runFromDoc(snap as QueryDocumentSnapshot<DocumentData>);
+  },
+
+  async getAuditLogs() {
+    // Audit logging is implemented on the local backend; Firebase can store these in a collection as needed.
+    return [];
   },
 };

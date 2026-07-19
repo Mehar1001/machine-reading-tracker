@@ -1,7 +1,9 @@
 // In-memory mock backend. Seeded on startup. Data resets on full app reload.
 // Implements the same Backend interface as the (future) firebase adapter.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
+  AuditLog,
   Backend,
   CreateEmployeeInput,
   CreateMachineInput,
@@ -10,6 +12,7 @@ import type {
   CreateStoreInput,
   Employee,
   Machine,
+  Role,
   Run,
   RunFilters,
   RunMachine,
@@ -17,6 +20,7 @@ import type {
   Store,
   SubmitRunInput,
 } from './types';
+import { calcRun } from './calc';
 
 // ─── ID + date helpers ───────────────────────────────────────
 let idCounter = 1000;
@@ -45,12 +49,13 @@ interface Credential {
   email: string;
   password: string;
   name: string;
-  role: 'owner' | 'employee';
+  role: Role;
   ownerId: string;
   active: boolean;
 }
 
-const credentials: Credential[] = [];
+let credentials: Credential[] = [];
+export const SEED_CREDENTIALS: { email: string; password: string; role: Role }[] = [];
 
 // ─── In-memory tables (keyed by ownerId) ─────────────────────
 interface OwnerData {
@@ -58,6 +63,7 @@ interface OwnerData {
   machines: Record<string, Machine[]>; // storeId -> machines
   employees: Employee[];
   runs: Run[];
+  auditLogs: AuditLog[];
 }
 
 function buildSeed(): Record<string, OwnerData> {
@@ -65,18 +71,133 @@ function buildSeed(): Record<string, OwnerData> {
   return {};
 }
 
-const db: Record<string, OwnerData> = buildSeed();
+function emptyOwnerData(): OwnerData {
+  return { stores: [], machines: {}, employees: [], runs: [], auditLogs: [] };
+}
+
+let db: Record<string, OwnerData> = buildSeed();
+let initPromise: Promise<void> | null = null;
+let initialized = false;
+
+const STORAGE_KEYS = {
+  db: 'machine-reading-tracker:local:db',
+  credentials: 'machine-reading-tracker:local:credentials',
+} as const;
+
+async function init() {
+  if (initialized) return;
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      const pairs = await AsyncStorage.multiGet([STORAGE_KEYS.db, STORAGE_KEYS.credentials]);
+      const dbValue = pairs.find(([k]) => k === STORAGE_KEYS.db)?.[1];
+      const credsValue = pairs.find(([k]) => k === STORAGE_KEYS.credentials)?.[1];
+      if (dbValue) {
+        const parsed = JSON.parse(dbValue);
+        if (parsed && typeof parsed === 'object') db = parsed;
+      }
+      if (credsValue) {
+        const parsed = JSON.parse(credsValue);
+        if (Array.isArray(parsed)) credentials = parsed;
+      }
+    } catch {
+      // ignore corrupted storage
+    }
+    syncSeed();
+    initialized = true;
+  })();
+  return initPromise;
+}
+
+async function persist() {
+  try {
+    await AsyncStorage.multiSet([
+      [STORAGE_KEYS.db, JSON.stringify(db)],
+      [STORAGE_KEYS.credentials, JSON.stringify(credentials)],
+    ]);
+    syncSeed();
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function syncSeed() {
+  SEED_CREDENTIALS.length = 0;
+  SEED_CREDENTIALS.push(...credentials.map((c) => ({ email: c.email, password: c.password, role: c.role })));
+}
+
+export async function getSeedCredentials(): Promise<{ email: string; password: string; role: Role }[]> {
+  await init();
+  return SEED_CREDENTIALS.slice();
+}
 
 function ownerData(ownerId: string): OwnerData {
-  if (!db[ownerId]) db[ownerId] = { stores: [], machines: {}, employees: [], runs: [] };
+  if (!db[ownerId]) db[ownerId] = emptyOwnerData();
   return db[ownerId];
 }
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 
+function logAudit(
+  ownerId: string,
+  action: string,
+  entity: AuditLog['entity'],
+  entityId?: string,
+  details?: string
+) {
+  const data = ownerData(ownerId);
+  data.auditLogs.push({
+    id: genId('audit'),
+    action,
+    entity,
+    entityId,
+    ownerId,
+    userUid: ownerId,
+    userName: 'System',
+    details,
+    timestamp: Date.now(),
+  });
+}
+
+function wrapBackend<T extends Backend>(adapter: T): Backend {
+  const mutationKeys: (keyof Backend)[] = [
+    'registerOwner',
+    'createStore',
+    'updateStore',
+    'deleteStore',
+    'createMachine',
+    'updateMachine',
+    'deleteMachine',
+    'createEmployee',
+    'setEmployeeActive',
+    'deleteEmployee',
+    'createRun',
+    'submitRun',
+    'printRun',
+    'unlockRun',
+    'deleteRun',
+  ];
+  const mutations = new Set(mutationKeys);
+  const wrapped = {} as Backend;
+  for (const key of Object.keys(adapter) as (keyof Backend)[]) {
+    const fn = (adapter as any)[key] as unknown as (...args: any[]) => any;
+    if (typeof fn !== 'function') {
+      (wrapped as any)[key] = fn;
+      continue;
+    }
+    (wrapped as any)[key] = async (...args: any[]) => {
+      await init();
+      const result = await fn(...args);
+      if (mutations.has(key)) await persist();
+      return result;
+    };
+  }
+  return wrapped;
+}
+
 // ─── Adapter implementation ──────────────────────────────────
-export const localAdapter: Backend = {
+const _localAdapter: Backend = {
   async login(email, password) {
     await delay();
     const cred = credentials.find((c) => c.email.toLowerCase() === email.trim().toLowerCase());
@@ -118,6 +239,7 @@ export const localAdapter: Backend = {
       active: true,
     });
     ownerData(ownerId); // create empty data tree
+    logAudit(ownerId, 'registerOwner', 'auth', ownerId, `Owner ${user.email} registered`);
     return user;
   },
 
@@ -154,20 +276,26 @@ export const localAdapter: Backend = {
       createdAt: Date.now(),
     };
     data.stores.push(store);
+    logAudit(ownerId, 'createStore', 'store', store.id, `Store ${store.name} created`);
     return clone(store);
   },
 
   async updateStore(ownerId, storeId, patch) {
     await delay(80);
     const s = ownerData(ownerId).stores.find((x) => x.id === storeId);
-    if (s) Object.assign(s, patch);
+    if (s) {
+      Object.assign(s, patch);
+      logAudit(ownerId, 'updateStore', 'store', storeId, `Store ${s.name} updated`);
+    }
   },
 
   async deleteStore(ownerId, storeId) {
     await delay(80);
     const data = ownerData(ownerId);
+    const store = data.stores.find((s) => s.id === storeId);
     data.stores = data.stores.filter((s) => s.id !== storeId);
     delete data.machines[storeId];
+    logAudit(ownerId, 'deleteStore', 'store', storeId, `Store ${store?.name ?? storeId} deleted`);
   },
 
   // ── machines ──
@@ -200,19 +328,25 @@ export const localAdapter: Backend = {
     };
     if (!data.machines[input.storeId]) data.machines[input.storeId] = [];
     data.machines[input.storeId].push(machine);
+    logAudit(ownerId, 'createMachine', 'machine', machine.id, `Machine ${machine.label} created for store ${storeName}`);
     return clone(machine);
   },
 
   async updateMachine(ownerId, storeId, machineId, patch) {
     await delay(60);
     const m = (ownerData(ownerId).machines[storeId] ?? []).find((x) => x.id === machineId);
-    if (m) Object.assign(m, patch);
+    if (m) {
+      Object.assign(m, patch);
+      logAudit(ownerId, 'updateMachine', 'machine', machineId, `Machine ${m.label} updated`);
+    }
   },
 
   async deleteMachine(ownerId, storeId, machineId) {
     await delay(60);
     const data = ownerData(ownerId);
+    const machine = (data.machines[storeId] ?? []).find((m) => m.id === machineId);
     data.machines[storeId] = (data.machines[storeId] ?? []).filter((m) => m.id !== machineId);
+    logAudit(ownerId, 'deleteMachine', 'machine', machineId, `Machine ${machine?.label ?? machineId} deleted`);
   },
 
   // ── employees ──
@@ -226,16 +360,18 @@ export const localAdapter: Backend = {
     const existing = credentials.find((c) => c.email.toLowerCase() === input.email.trim().toLowerCase());
     if (existing) throw new Error('Email already in use.');
     const uid = genId('emp');
+    const role = input.role === 'viewer' ? 'viewer' : 'employee';
     const employee: Employee = {
       uid,
       name: input.name,
       email: input.email.trim(),
-      role: 'employee',
+      role,
       active: true,
       createdAt: Date.now(),
     };
     ownerData(ownerId).employees.push(employee);
-    credentials.push({ uid, email: employee.email, password: input.password, name: input.name, role: 'employee', ownerId, active: true });
+    credentials.push({ uid, email: employee.email, password: input.password, name: input.name, role, ownerId, active: true });
+    logAudit(ownerId, 'createEmployee', 'employee', uid, `Employee ${employee.email} created as ${role}`);
     return clone(employee);
   },
 
@@ -245,14 +381,17 @@ export const localAdapter: Backend = {
     if (e) e.active = active;
     const c = credentials.find((x) => x.uid === uid);
     if (c) c.active = active;
+    logAudit(ownerId, 'setEmployeeActive', 'employee', uid, `Employee ${uid} set active=${active}`);
   },
 
   async deleteEmployee(ownerId, uid) {
     await delay(80);
     const data = ownerData(ownerId);
+    const employee = data.employees.find((e) => e.uid === uid);
     data.employees = data.employees.filter((e) => e.uid !== uid);
     const idx = credentials.findIndex((c) => c.uid === uid);
     if (idx >= 0) credentials.splice(idx, 1);
+    logAudit(ownerId, 'deleteEmployee', 'employee', uid, `Employee ${employee?.email ?? uid} deleted`);
   },
 
   // ── runs ──
@@ -286,57 +425,42 @@ export const localAdapter: Backend = {
     await delay();
     const data = ownerData(ownerId);
     const store = data.stores.find((s) => s.id === input.storeId);
-    const lastRun = data.runs
+    const allPrevious = data.runs
       .filter((r) => r.storeId === input.storeId)
-      .sort((a, b) => b.timestamp - a.timestamp)[0];
+      .sort((a, b) => b.timestamp - a.timestamp);
+    const lastPositiveRun =
+      allPrevious.find((r) => r.isPositive && (r.status === 'locked' || r.status === 'submitted')) ?? null;
+    const completedPreviousForStoreDay = allPrevious.filter(
+      (r) => r.date === input.date && (r.status === 'locked' || r.status === 'submitted')
+    );
+    const visitNumber = completedPreviousForStoreDay.length + 1;
+
+    const machineVisitNumbers: Record<string, number> = {};
+    input.machines.forEach((m) => {
+      const count = completedPreviousForStoreDay.filter((r) => r.machines[m.machineId] != null).length;
+      machineVisitNumbers[m.machineId] = count + 1;
+    });
 
     const storeMachines = data.machines[input.storeId] ?? [];
-    const machines: Record<string, RunMachine> = {};
-    let totalNewIn = 0;
-    let totalNewOut = 0;
-    input.machines.forEach((m) => {
-      const machineDef = storeMachines.find((x) => x.id === m.machineId);
-      // Cumulative meter readings: the user enters the current reading, and the
-      // incremental amount for this run is current reading minus previous reading.
-      const lastIn = lastRun?.machines[m.machineId]?.presentIn ?? machineDef?.initialIn ?? 0;
-      const lastOut = lastRun?.machines[m.machineId]?.presentOut ?? machineDef?.initialOut ?? 0;
-      const newIn = m.presentIn - lastIn;
-      const newOut = m.presentOut - lastOut;
-      totalNewIn += newIn;
-      totalNewOut += newOut;
-      machines[m.machineId] = {
-        code: machineDef?.code,
-        label: m.label,
-        name: machineDef?.name,
-        presentIn: m.presentIn,
-        presentOut: m.presentOut,
-        lastIn,
-        lastOut,
-        newIn,
-        newOut,
-        netMachine: newOut - newIn,
-        photoUrl: m.photoUrl,
-      };
-    });
-    const netTotal = totalNewOut - totalNewIn;
     const now = Date.now();
-    const run: Run = {
-      id: genId('run'),
+    const run = calcRun({
+      runId: genId('run'),
       storeId: input.storeId,
       storeName: store?.name ?? 'Store',
       employeeUid: input.employeeUid,
       employeeName: input.employeeName,
-      timestamp: now,
-      previousRunTimestamp: lastRun?.timestamp,
       date: input.date,
-      status: 'open',
-      machines,
-      totalNewIn,
-      totalNewOut,
-      netTotal,
-      isPositive: netTotal >= 0,
-    };
+      timestamp: now,
+      previousRunTimestamp: lastPositiveRun?.timestamp,
+      previousRun: lastPositiveRun,
+      machineDefs: storeMachines,
+      machines: input.machines,
+      visitNumber,
+      machineVisitNumbers,
+    });
+
     data.runs.push(run);
+    logAudit(ownerId, 'createRun', 'run', run.id, `Run ${run.id} created for ${run.storeName}`);
     return clone(run);
   },
 
@@ -351,11 +475,25 @@ export const localAdapter: Backend = {
     run.vendorCalculatedAmount = (run.netTotal * input.vendorPercentage) / 100;
     run.status = 'locked';
     run.submittedAt = Date.now();
+    run.updatedAt = Date.now();
     const store = data.stores.find((s) => s.id === run.storeId);
     if (store) {
       store.lastStorePercentage = input.storePercentage;
       store.lastVendorPercentage = input.vendorPercentage;
     }
+    logAudit(ownerId, 'submitRun', 'run', run.id, `Run ${run.id} submitted and locked`);
+    return clone(run);
+  },
+
+  async printRun(ownerId, runId) {
+    await delay(50);
+    const data = ownerData(ownerId);
+    const run = data.runs.find((r) => r.id === runId);
+    if (!run) return null;
+    run.printedAt = Date.now();
+    run.printStatus = run.printStatus === 'printed' ? 'reprinted' : 'printed';
+    run.updatedAt = Date.now();
+    logAudit(ownerId, 'printRun', 'run', run.id, `Run ${run.id} printed/reprinted`);
     return clone(run);
   },
 
@@ -365,6 +503,8 @@ export const localAdapter: Backend = {
     if (run) {
       run.status = 'open';
       run.submittedAt = undefined;
+      run.updatedAt = Date.now();
+      logAudit(ownerId, 'unlockRun', 'run', run.id, `Run ${run.id} unlocked for editing`);
     }
   },
 
@@ -372,8 +512,16 @@ export const localAdapter: Backend = {
     await delay(80);
     const data = ownerData(ownerId);
     data.runs = data.runs.filter((r) => r.id !== runId);
+    logAudit(ownerId, 'deleteRun', 'run', runId, `Run ${runId} deleted`);
+  },
+
+  // ── audit ──
+  async getAuditLogs(ownerId, limit = 100) {
+    await delay(50);
+    const logs = ownerData(ownerId).auditLogs.slice();
+    logs.sort((a, b) => b.timestamp - a.timestamp);
+    return clone(logs.slice(0, limit));
   },
 };
 
-// Exposed for the login screen hint in local mode.
-export const SEED_CREDENTIALS = credentials.map((c) => ({ email: c.email, password: c.password, role: c.role }));
+export const localAdapter: Backend = wrapBackend(_localAdapter);

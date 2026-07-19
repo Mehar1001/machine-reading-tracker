@@ -28,6 +28,7 @@ export default function ManageEmployees() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'employee' | 'viewer'>('employee');
   const [showPass, setShowPass] = useState(false);
 
   const load = useCallback(async () => {
@@ -50,6 +51,7 @@ export default function ManageEmployees() {
     setName('');
     setEmail('');
     setPassword(randomPassword());
+    setRole('employee');
     setShowPass(true);
     setModal(true);
   };
@@ -62,7 +64,7 @@ export default function ManageEmployees() {
     }
     setSaving(true);
     try {
-      await backend.createEmployee(user.ownerId, { name: name.trim(), email: email.trim(), password });
+      await backend.createEmployee(user.ownerId, { name: name.trim(), email: email.trim(), password, role });
       setModal(false);
       load();
       Alert.alert('Employee created', `${name.trim()} can now sign in.\n\nEmail: ${email.trim()}\nPassword: ${password}`);
@@ -96,7 +98,7 @@ export default function ManageEmployees() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScreenHeader title="Employees" showBack rightIcon="person-add-outline" onRightPress={openAdd} />
+      <ScreenHeader title="Employees" showBack backTo="/(admin)/admin" rightIcon="person-add-outline" onRightPress={openAdd} />
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: space.xl }} />
@@ -112,6 +114,7 @@ export default function ManageEmployees() {
                   <StatusBadge kind={e.active ? 'positive' : 'negative'} label={e.active ? 'Active' : 'Disabled'} />
                 </View>
                 <Text style={styles.email}>{e.email}</Text>
+                <Text style={styles.roleText}>Role: {e.role}</Text>
               </View>
               <Switch
                 value={e.active}
@@ -133,6 +136,21 @@ export default function ManageEmployees() {
             <Text style={styles.sheetTitle}>Add employee</Text>
             <Text style={styles.inputLabel}>NAME</Text>
             <TextInput value={name} onChangeText={setName} placeholder="Full name" placeholderTextColor={colors.subtext} style={styles.input} />
+            <Text style={styles.inputLabel}>ROLE</Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                style={[styles.roleOption, role === 'employee' && styles.roleOptionActive]}
+                onPress={() => setRole('employee')}
+              >
+                <Text style={[styles.roleOptionText, role === 'employee' && styles.roleOptionTextActive]}>Employee</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.roleOption, role === 'viewer' && styles.roleOptionActive]}
+                onPress={() => setRole('viewer')}
+              >
+                <Text style={[styles.roleOptionText, role === 'viewer' && styles.roleOptionTextActive]}>Viewer</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.inputLabel}>EMAIL</Text>
             <TextInput
               value={email}
@@ -187,6 +205,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   name: { color: colors.text, fontSize: font.md, fontWeight: '800' },
   email: { color: colors.subtext, fontSize: font.sm, marginTop: 2 },
+  roleText: { color: colors.primary, fontSize: font.xs, fontWeight: '700', textTransform: 'capitalize', marginTop: 2 },
   iconBtn: { padding: space.xs },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: {
@@ -223,4 +242,18 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { alignItems: 'center', paddingVertical: space.md },
   cancelText: { color: colors.subtext, fontSize: font.sm, fontWeight: '600' },
+  roleRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
+  roleOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.input,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.inputBg,
+  },
+  roleOptionActive: { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+  roleOptionText: { color: colors.subtext, fontSize: font.sm, fontWeight: '700' },
+  roleOptionTextActive: { color: colors.primary },
 });

@@ -52,6 +52,15 @@ export default function StoreListScreen({ isAdmin }: Props) {
     }, [load])
   );
 
+  const canManage = isAdmin || user?.role === 'employee';
+  const headerRightPress = canManage ? () => router.push('/admin/manage-stores' as any) : signOut;
+  const headerRightBadge =
+    user && user.role !== 'viewer' ? (
+      <TouchableOpacity onPress={signOut} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Ionicons name="log-out-outline" size={22} color={colors.subtext} />
+      </TouchableOpacity>
+    ) : undefined;
+
   const filtered = stores.filter(
     (s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -66,7 +75,7 @@ export default function StoreListScreen({ isAdmin }: Props) {
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.storeCard}
-        onPress={() => router.push((isAdmin ? `/admin/stores/${item.id}` : `/stores/${item.id}`) as any)}
+        onPress={() => router.push(`/stores/${item.id}` as any)}
       >
         <View style={styles.storeIcon}>
           <Ionicons name="storefront-outline" size={20} color={colors.primary} />
@@ -98,8 +107,9 @@ export default function StoreListScreen({ isAdmin }: Props) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScreenHeader
         title={isAdmin ? `All stores (${filtered.length})` : 'Select store'}
-        rightIcon={isAdmin ? 'add' : 'log-out-outline'}
-        onRightPress={isAdmin ? () => router.push('/admin/manage-stores') : signOut}
+        rightIcon={isAdmin ? 'add' : canManage ? 'settings-outline' : 'log-out-outline'}
+        onRightPress={headerRightPress}
+        rightBadge={headerRightBadge}
       />
       {isAdmin && <Text style={styles.subline}>{user?.name ?? 'Admin'}</Text>}
 
@@ -121,12 +131,12 @@ export default function StoreListScreen({ isAdmin }: Props) {
           <EmptyState
             icon="storefront-outline"
             title="No stores found"
-            subtitle={isAdmin ? 'Tap below to add your first store.' : 'No stores assigned. Contact your admin.'}
+            subtitle={canManage ? 'Tap below to manage stores.' : 'No stores assigned. Contact your admin.'}
           />
-          {isAdmin && (
+          {(isAdmin || canManage) && (
             <GoldButton
-              label="Add store"
-              icon="add"
+              label="Manage stores"
+              icon={isAdmin ? 'add' : 'settings-outline'}
               onPress={() => router.push('/admin/manage-stores' as any)}
               style={{ marginTop: space.md }}
             />

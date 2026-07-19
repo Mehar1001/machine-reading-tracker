@@ -7,6 +7,7 @@ interface Props {
   onChangeValue: (raw: string) => void;
   placeholder?: string;
   editable?: boolean;
+  allowEmpty?: boolean;
   style?: StyleProp<ViewStyle>;
   borderColor?: string;
   textAlign?: 'left' | 'center' | 'right';
@@ -24,6 +25,7 @@ export default function CurrencyInput({
   onChangeValue,
   placeholder = '$0.00',
   editable = true,
+  allowEmpty = false,
   style,
   borderColor,
   textAlign = 'center',
@@ -36,6 +38,7 @@ export default function CurrencyInput({
     if (focused) {
       return raw ? `$${raw}` : '$';
     }
+    if (!raw && allowEmpty) return '';
     const num = Number(raw || 0);
     const formatted = Math.abs(num).toLocaleString('en-US', {
       minimumFractionDigits: 2,
@@ -51,6 +54,7 @@ export default function CurrencyInput({
 
   const handleBlur = () => {
     setFocused(false);
+    if (!raw && allowEmpty) return;
     const normalized = Number(raw || 0).toFixed(2);
     onChangeValue(normalized);
   };

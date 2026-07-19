@@ -20,4 +20,4 @@ export const backend: Backend = getBackend();
 export const BACKEND_MODE = mode;
 
 export * from './types';
-export { SEED_CREDENTIALS } from './localAdapter';
+export { SEED_CREDENTIALS, getSeedCredentials } from './localAdapter';

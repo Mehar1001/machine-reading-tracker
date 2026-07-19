@@ -36,8 +36,10 @@ export default function ManageStores() {
   const [mInitialIn, setMInitialIn] = useState('0');
   const [mInitialOut, setMInitialOut] = useState('0');
 
+  const canDelete = user?.role === 'owner';
+
   const load = useCallback(async () => {
-    if (!user || user.role !== 'owner') return;
+    if (!user || (user.role !== 'owner' && user.role !== 'employee')) return;
     setLoading(true);
     const list = await backend.getStores(user.ownerId);
     setStores(list);
@@ -53,7 +55,7 @@ export default function ManageStores() {
   );
 
   if (!user) return <Redirect href="/" />;
-  if (user.role !== 'owner') return <Redirect href="/(employee)/stores" />;
+  if (user.role !== 'owner' && user.role !== 'employee') return <Redirect href="/(employee)/history" />;
 
   const openAddStore = () => {
     setEditStore(null);
@@ -83,6 +85,10 @@ export default function ManageStores() {
   };
 
   const confirmDeleteStore = (s: Store) => {
+    if (!canDelete) {
+      Alert.alert('Permission denied', 'Only owners can delete stores.');
+      return;
+    }
     Alert.alert('Delete store?', `"${s.name}" and its machines will be removed.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -108,24 +114,31 @@ export default function ManageStores() {
   };
 
   const openAddMachine = () => {
-    setMLabel(`Machine ${machines.length + 1}`);
-    setMOrder(String(machines.length + 1));
-    setMInitialIn('0');
-    setMInitialOut('0');
+    const nextOrder = machines.length > 0 ? Math.max(...machines.map((m) => m.order)) + 1 : 1;
+    setMLabel(`Machine ${nextOrder}`);
+    setMOrder(String(nextOrder));
+    setMInitialIn('');
+    setMInitialOut('');
     setMachineModal(true);
   };
 
   const saveMachine = async () => {
     if (!user || !expanded || !mLabel.trim()) {
-      Alert.alert('Label required', 'Enter a machine label.');
+      Alert.alert('Machine name required', 'Enter a machine name.');
+      return;
+    }
+    const initialIn = parseFloat(mInitialIn);
+    const initialOut = parseFloat(mInitialOut);
+    if (mInitialIn.trim() === '' || mInitialOut.trim() === '' || Number.isNaN(initialIn) || Number.isNaN(initialOut)) {
+      Alert.alert('Initial values required', 'Enter Initial IN and Initial OUT in $0.00 format.');
       return;
     }
     await backend.createMachine(user.ownerId, {
       storeId: expanded,
       label: mLabel.trim(),
       order: Number(mOrder) || machines.length + 1,
-      initialIn: Number(mInitialIn) || 0,
-      initialOut: Number(mInitialOut) || 0,
+      initialIn,
+      initialOut,
     });
     setMachineModal(false);
     setMachines(await backend.getMachines(user.ownerId, expanded));
@@ -133,6 +146,10 @@ export default function ManageStores() {
   };
 
   const deleteMachine = (m: Machine) => {
+    if (!canDelete) {
+      Alert.alert('Permission denied', 'Only owners can delete machines.');
+      return;
+    }
     Alert.alert('Delete machine?', m.label, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -150,7 +167,7 @@ export default function ManageStores() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScreenHeader title="All stores" showBack rightIcon="add-circle-outline" onRightPress={openAddStore} />
+      <ScreenHeader title="All stores" showBack backTo="/(admin)/admin" rightIcon="add-circle-outline" onRightPress={openAddStore} />
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: space.xl }} />
@@ -231,18 +248,20 @@ export default function ManageStores() {
           <View style={[styles.sheet, { paddingBottom: insets.bottom + space.lg }]}>
             <Text style={styles.sheetTitle}>Add machine</Text>
             <Text style={styles.autoNote}>Machine ID is auto-generated from the store name.</Text>
-            <Text style={styles.inputLabel}>LABEL</Text>
-            <TextInput value={mLabel} onChangeText={setMLabel} placeholder="Machine 5" placeholderTextColor={colors.subtext} style={styles.input} />
-            <Text style={styles.inputLabel}>ORDER</Text>
-            <TextInput value={mOrder} onChangeText={(v) => setMOrder(v.replace(/[^0-9]/g, ''))} keyboardType="numeric" placeholder="5" placeholderTextColor={colors.subtext} style={styles.input} />
+            <Text style={styles.inputLabel}>MACHINE NAME</Text>
+            <TextInput value={mLabel} onChangeText={setMLabel} placeholder="Machine name" placeholderTextColor={colors.subtext} style={styles.input} />
+            <Text style={styles.inputLabel}>MACHINE NUMBER</Text>
+            <View style={styles.readOnlyInput}>
+              <Text style={styles.readOnlyText}>{mOrder}</Text>
+            </View>
             <View style={styles.initialRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>INITIAL IN</Text>
-                <CurrencyInput value={mInitialIn} onChangeValue={setMInitialIn} placeholder="$0.00" />
+                <CurrencyInput value={mInitialIn} onChangeValue={setMInitialIn} placeholder="$0.00" allowEmpty />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>INITIAL OUT</Text>
-                <CurrencyInput value={mInitialOut} onChangeValue={setMInitialOut} placeholder="$0.00" />
+                <CurrencyInput value={mInitialOut} onChangeValue={setMInitialOut} placeholder="$0.00" allowEmpty />
               </View>
             </View>
             <GoldButton label="Add" icon="checkmark" onPress={saveMachine} style={{ marginTop: space.md }} />
@@ -311,4 +330,15 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { alignItems: 'center', paddingVertical: space.md },
   cancelText: { color: colors.subtext, fontSize: font.sm, fontWeight: '600' },
+  readOnlyInput: {
+    height: 44,
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.input,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    paddingHorizontal: space.md,
+    justifyContent: 'center',
+    marginBottom: space.md,
+  },
+  readOnlyText: { color: colors.text, fontSize: font.sm, fontWeight: '700' },
 });

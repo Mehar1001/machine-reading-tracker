@@ -10,7 +10,7 @@ function buildHtml(run: Run): string {
   const lastRows = machineIds
     .map((id) => {
       const m = run.machines[id];
-      return `<tr><td>${m.label}</td><td>${money(m.lastIn)}</td><td>${money(m.lastOut)}</td><td>${money(m.lastOut - m.lastIn)}</td></tr>`;
+      return `<tr><td>${m.label}</td><td>${money(m.lastIn)}</td><td>${money(m.lastOut)}</td><td>${money(m.lastIn - m.lastOut)}</td></tr>`;
     })
     .join('');
 

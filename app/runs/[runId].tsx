@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,6 +54,16 @@ export default function RunResults() {
 
   const canSubmit = !!run && run.isPositive && pctValid && !locked;
 
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (run) {
+      router.replace(`/stores/${run.storeId}` as any);
+    } else {
+      router.replace((user?.role === 'owner' ? '/(admin)/stores' : '/(employee)/stores') as any);
+    }
+  };
+
   const onSubmit = async () => {
     if (!user || !run || !canSubmit) return;
     setSubmitting(true);
@@ -64,6 +74,7 @@ export default function RunResults() {
         vendorPercentage: toNumber(vendorPct),
       });
       await generateRunPdf(updated);
+      await backend.printRun(user.ownerId, run.id);
       router.replace(user.role === 'owner' ? '/(admin)/stores' : '/(employee)/stores');
     } catch (e: any) {
       Alert.alert('Submit failed', e?.message ?? 'Unable to submit run.');
@@ -73,12 +84,13 @@ export default function RunResults() {
   };
 
   const onPrint = async () => {
-    if (!run) return;
+    if (!run || !user) return;
     try {
       const forPrint: Run = locked
         ? run
         : { ...run, storePercentage: toNumber(storePct), vendorPercentage: toNumber(vendorPct), storeCalculatedAmount: storeAmount, vendorCalculatedAmount: vendorAmount };
       await generateRunPdf(forPrint);
+      await backend.printRun(user.ownerId, run.id);
     } catch (e: any) {
       Alert.alert('Print failed', e?.message ?? 'Unable to generate PDF.');
     }
@@ -96,7 +108,7 @@ export default function RunResults() {
     return (
       <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
         <Text style={styles.notFound}>Run not found.</Text>
-        <OutlinedButton label="GO BACK" onPress={() => router.back()} icon="arrow-back" style={{ marginTop: space.md }} />
+        <OutlinedButton label="GO BACK" onPress={goBack} icon="arrow-back" style={{ marginTop: space.md }} />
       </View>
     );
   }
@@ -107,7 +119,9 @@ export default function RunResults() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="chevron-back" size={26} color={colors.text} onPress={() => router.back()} />
+        <TouchableOpacity onPress={goBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="chevron-back" size={26} color={colors.text} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Run results</Text>
         <View style={styles.headerRight}>
           {locked && <StatusBadge kind="locked" />}
@@ -251,7 +265,7 @@ export default function RunResults() {
         {/* Buttons */}
         {!locked && (
           <GoldButton
-            label="SUBMIT & PRINT"
+            label="Print and Save to History"
             icon="print"
             variant="success"
             disabled={!canSubmit}

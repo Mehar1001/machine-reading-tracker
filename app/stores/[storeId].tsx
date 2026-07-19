@@ -78,7 +78,8 @@ export default function StoreDetail() {
       const prevOut = lastRun?.machines[r.machine.id]?.presentOut ?? r.machine.initialOut ?? 0;
       const newIn = toNumber(r.in) - prevIn;
       const newOut = toNumber(r.out) - prevOut;
-      return { ...r, prevIn, prevOut, newIn, newOut, netMachine: newOut - newIn };
+      // Machine net = voucher IN - voucher OUT (derived from the incremental new readings).
+      return { ...r, prevIn, prevOut, newIn, newOut, netMachine: newIn - newOut };
     });
   }, [rows, lastRun]);
 
@@ -89,7 +90,8 @@ export default function StoreDetail() {
       totalNewIn += r.newIn;
       totalNewOut += r.newOut;
     });
-    return { totalNewIn, totalNewOut, net: totalNewOut - totalNewIn };
+    // Net total = Total new IN - Total new OUT.
+    return { totalNewIn, totalNewOut, net: totalNewIn - totalNewOut };
   }, [rowComputations]);
 
   const updateRow = (id: string, key: 'in' | 'out', value: string) => {
@@ -205,7 +207,13 @@ export default function StoreDetail() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScreenHeader title={store?.name ?? 'Store'} showBack rightIcon="settings-outline" />
+      <ScreenHeader
+        title={store?.name ?? 'Store'}
+        showBack
+        backTo={user?.role === 'owner' ? '/(admin)/stores' : '/(employee)/stores'}
+        rightIcon="settings-outline"
+        onRightPress={() => router.push('/admin/manage-stores' as any)}
+      />
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 360 }} showsVerticalScrollIndicator={false}>
         {/* Store info card (collapsible) */}
@@ -353,7 +361,7 @@ export default function StoreDetail() {
           />
           <Text style={[styles.statusText, { color: isPositive ? colors.success : colors.danger }]}>
             {isPositive
-              ? 'Net is positive. Submit and print will be available on the next screen.'
+              ? 'Net is positive. Print and Save to History will be available on the next screen.'
               : 'Net is negative. This run will be saved directly to history.'}
           </Text>
         </View>

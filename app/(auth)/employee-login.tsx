@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,9 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import InputField from '@/components/ui/InputField';
 import GoldButton from '@/components/ui/GoldButton';
 import { useSession } from '@/context/SessionContext';
-import { BACKEND_MODE, SEED_CREDENTIALS } from '@/backend';
+import { BACKEND_MODE, SEED_CREDENTIALS, getSeedCredentials } from '@/backend';
 import { colors, font, space, radius } from '@/constants/theme';
 import type { Role } from '@/backend/types';
+
+const ROLES: { key: Role; label: string; icon: any }[] = [
+  { key: 'employee', label: 'Employee', icon: 'person-outline' },
+  { key: 'viewer', label: 'Viewer', icon: 'eye-outline' },
+  { key: 'owner', label: 'Admin / Owner', icon: 'shield-checkmark-outline' },
+];
 
 export default function EmployeeLogin() {
   const router = useRouter();
@@ -21,6 +27,7 @@ export default function EmployeeLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [seedCreds, setSeedCreds] = useState(SEED_CREDENTIALS);
 
   const onSignIn = async () => {
     if (!email.trim() || !password) {
@@ -31,7 +38,13 @@ export default function EmployeeLogin() {
     setLoading(true);
     try {
       const user = await signIn(email, password);
-      router.replace(user.role === 'owner' ? '/(admin)/stores' : '/(employee)/stores');
+      if (user.role === 'owner') {
+        router.replace('/(admin)/stores');
+      } else if (user.role === 'viewer') {
+        router.replace('/(employee)/history');
+      } else {
+        router.replace('/(employee)/stores');
+      }
     } catch (e: any) {
       setError(e?.message ?? 'Unable to sign in.');
     } finally {
@@ -45,9 +58,22 @@ export default function EmployeeLogin() {
     setError('');
   };
 
-  const roleTitle = selectedRole === 'owner' ? 'Admin portal' : 'Welcome to GMT';
-  const roleSub = selectedRole === 'owner' ? 'GMT machine management system' : 'Sign in to your account';
-  const seedCredentials = SEED_CREDENTIALS.filter((credential) => credential.role === selectedRole);
+  const roleTitle = selectedRole === 'owner' ? 'Admin portal' : selectedRole === 'viewer' ? 'Read-only access' : 'Welcome to GMT';
+  const roleSub = selectedRole === 'owner' ? 'GMT machine management system' : selectedRole === 'viewer' ? 'Sign in to view history' : 'Sign in to your account';
+
+  useEffect(() => {
+    let active = true;
+    if (BACKEND_MODE === 'local') {
+      getSeedCredentials().then((creds) => {
+        if (active) setSeedCreds(creds);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const seedCredentials = seedCreds.filter((credential) => credential.role === selectedRole);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
@@ -57,7 +83,17 @@ export default function EmployeeLogin() {
       >
         <View style={styles.logoWrap}>
           <View style={styles.logoCircle}>
-            <Ionicons name={selectedRole === 'owner' ? 'shield-checkmark-outline' : 'person-outline'} size={26} color={colors.onPrimary} />
+            <Ionicons
+              name={
+                selectedRole === 'owner'
+                  ? 'shield-checkmark-outline'
+                  : selectedRole === 'viewer'
+                  ? 'eye-outline'
+                  : 'person-outline'
+              }
+              size={26}
+              color={colors.onPrimary}
+            />
           </View>
           <Text style={styles.appName}>{roleTitle}</Text>
           <Text style={styles.tagline}>{roleSub}</Text>
@@ -65,20 +101,16 @@ export default function EmployeeLogin() {
 
         <View style={styles.card}>
           <View style={styles.roleSwitch}>
-            <TouchableOpacity
-              onPress={() => setSelectedRole('employee')}
-              style={[styles.roleOption, selectedRole === 'employee' && styles.roleOptionActive]}
-            >
-              <Ionicons name="person-outline" size={18} color={selectedRole === 'employee' ? colors.primary : colors.subtext} />
-              <Text style={[styles.roleText, selectedRole === 'employee' && styles.roleTextActive]}>Employee</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setSelectedRole('owner')}
-              style={[styles.roleOption, selectedRole === 'owner' && styles.roleOptionActive]}
-            >
-              <Ionicons name="shield-checkmark-outline" size={18} color={selectedRole === 'owner' ? colors.primary : colors.subtext} />
-              <Text style={[styles.roleText, selectedRole === 'owner' && styles.roleTextActive]}>Admin / Owner</Text>
-            </TouchableOpacity>
+            {ROLES.map((r) => (
+              <TouchableOpacity
+                key={r.key}
+                onPress={() => setSelectedRole(r.key)}
+                style={[styles.roleOption, selectedRole === r.key && styles.roleOptionActive]}
+              >
+                <Ionicons name={r.icon} size={18} color={selectedRole === r.key ? colors.primary : colors.subtext} />
+                <Text style={[styles.roleText, selectedRole === r.key && styles.roleTextActive]}>{r.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           <InputField

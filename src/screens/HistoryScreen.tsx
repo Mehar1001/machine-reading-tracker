@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { backend } from '@/backend';
 import type { Run, Store, Employee, RunStatus } from '@/backend/types';
 import { useSession } from '@/context/SessionContext';
+import { generateRunPdf } from '@/utils/generatePdf';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import StatusBadge, { BadgeKind } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
@@ -64,6 +65,16 @@ export default function HistoryScreen({ isAdmin, title = 'Transaction history' }
     if (isAdmin) setEmployees(await backend.getEmployees(user.ownerId));
     setLoading(false);
   }, [user, isAdmin]);
+
+  const reprint = async (run: Run) => {
+    if (!user) return;
+    try {
+      const printed = await backend.printRun(user.ownerId, run.id);
+      if (printed) await generateRunPdf(printed);
+    } catch (e: any) {
+      Alert.alert('Reprint failed', e?.message ?? 'Unable to reprint.');
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -163,6 +174,9 @@ export default function HistoryScreen({ isAdmin, title = 'Transaction history' }
                     NET {money(r.netTotal)}
                   </Text>
                   <Ionicons name="camera" size={16} color={hasPhotos ? colors.goldDark : colors.cardBorder} />
+                  <TouchableOpacity onPress={(e) => { e.stopPropagation(); reprint(r); }}>
+                    <Ionicons name="print-outline" size={16} color={colors.primary} />
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );

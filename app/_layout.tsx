@@ -21,7 +21,13 @@ function RootNavigator() {
     if (!user && !inAuthGroup && !atHome) {
       router.replace('/');
     } else if (user && (inAuthGroup || atHome)) {
-      router.replace(user.role === 'owner' ? '/(admin)/stores' : '/(employee)/stores');
+      if (user.role === 'owner') {
+        router.replace('/(admin)/stores');
+      } else if (user.role === 'viewer') {
+        router.replace('/(employee)/history');
+      } else {
+        router.replace('/(employee)/stores');
+      }
     }
   }, [user, loading, segments]);
 

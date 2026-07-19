@@ -7,18 +7,26 @@ import { colors, font, space } from '@/constants/theme';
 interface Props {
   title: string;
   showBack?: boolean;
+  backTo?: string;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightPress?: () => void;
   rightBadge?: React.ReactNode;
 }
 
-export default function ScreenHeader({ title, showBack, rightIcon, onRightPress, rightBadge }: Props) {
+export default function ScreenHeader({ title, showBack, backTo, rightIcon, onRightPress, rightBadge }: Props) {
   const router = useRouter();
+  const onBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (backTo) {
+      router.replace(backTo as any);
+    }
+  };
   return (
     <View style={styles.header}>
       <View style={styles.side}>
         {showBack && (
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="chevron-back" size={26} color={colors.text} />
           </TouchableOpacity>
         )}

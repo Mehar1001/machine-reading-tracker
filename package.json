@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "serve:web": "npx --yes serve -s dist -l 8083",
-    "host:web": "npm run build:web && npm run serve:web"
+    "host:web": "npm run build:web && npm run serve:web",
+    "test": "vitest run"
   },
   "dependencies": {
     "@expo/vector-icons": "14.0.3",
@@ -39,6 +40,7 @@
     "@babel/core": "^7.24.0",
     "@types/react": "~18.2.45",
     "babel-plugin-module-resolver": "^5.0.2",
-    "typescript": "~5.3.3"
+    "typescript": "~5.3.3",
+    "vitest": "^1.6.0"
   }
 }

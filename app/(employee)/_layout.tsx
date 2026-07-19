@@ -10,6 +10,8 @@ export default function EmployeeLayout() {
   if (!user) return <Redirect href="/" />;
   if (user.role === 'owner') return <Redirect href="/(admin)/stores" />;
 
+  const isViewer = user.role === 'viewer';
+
   return (
     <Tabs
       screenOptions={{
@@ -30,6 +32,7 @@ export default function EmployeeLayout() {
         name="stores"
         options={{
           title: 'Stores',
+          href: isViewer ? null : undefined,
           tabBarIcon: ({ color, size }) => <Ionicons name="storefront-outline" size={size} color={color} />,
         }}
       />

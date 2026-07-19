@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { backend } from '@/backend';
+import { generateRunPdf } from '@/utils/generatePdf';
 import type { Run } from '@/backend/types';
 import { useSession } from '@/context/SessionContext';
 import ScreenHeader from '@/components/ui/ScreenHeader';
@@ -31,6 +32,16 @@ export default function ManageRuns() {
     setRuns(await backend.getRuns(user.ownerId));
     setLoading(false);
   }, [user]);
+
+  const reprint = async (run: Run) => {
+    if (!user) return;
+    try {
+      const printed = await backend.printRun(user.ownerId, run.id);
+      if (printed) await generateRunPdf(printed);
+    } catch (e: any) {
+      Alert.alert('Reprint failed', e?.message ?? 'Unable to reprint.');
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -72,7 +83,7 @@ export default function ManageRuns() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScreenHeader title="All runs" showBack />
+      <ScreenHeader title="All runs" showBack backTo="/(admin)/admin" />
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: space.xl }} />
@@ -97,6 +108,10 @@ export default function ManageRuns() {
               </TouchableOpacity>
 
               <View style={styles.actions}>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => reprint(r)}>
+                  <Ionicons name="print-outline" size={16} color={colors.primary} />
+                  <Text style={[styles.actionText, { color: colors.primary }]}>Reprint</Text>
+                </TouchableOpacity>
                 {r.status === 'locked' && (
                   <TouchableOpacity style={styles.actionBtn} onPress={() => unlock(r)}>
                     <Ionicons name="lock-open-outline" size={16} color={colors.warning} />

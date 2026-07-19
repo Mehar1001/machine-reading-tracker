@@ -38,6 +38,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": "http://127.0.0.1"
+      }
     }
   }
 }

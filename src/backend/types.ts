@@ -1,7 +1,7 @@
 // Shared domain models + backend interface.
 // All screens talk to this interface only — never to a concrete backend.
 
-export type Role = 'owner' | 'employee';
+export type Role = 'owner' | 'employee' | 'viewer';
 
 export type RunStatus = 'open' | 'submitted' | 'locked';
 
@@ -58,6 +58,7 @@ export interface RunMachine {
   newOut: number;
   netMachine: number;
   photoUrl?: string;
+  visitNumber?: number;
 }
 
 export interface Run {
@@ -81,6 +82,11 @@ export interface Run {
   vendorCalculatedAmount?: number;
   submittedAt?: number;
   notes?: string;
+  visitNumber: number;
+  createdAt: number;
+  updatedAt: number;
+  printedAt?: number;
+  printStatus?: 'pending' | 'printed' | 'reprinted';
 }
 
 // ─── Input payloads ──────────────────────────────────────────
@@ -129,12 +135,25 @@ export interface CreateEmployeeInput {
   name: string;
   email: string;
   password: string;
+  role?: 'employee' | 'viewer';
 }
 
 export interface CreateOwnerInput {
   name: string;
   email: string;
   password: string;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  entity: 'store' | 'machine' | 'employee' | 'run' | 'auth';
+  entityId?: string;
+  ownerId: string;
+  userUid: string;
+  userName: string;
+  details?: string;
+  timestamp: number;
 }
 
 export interface RunFilters {
@@ -179,6 +198,10 @@ export interface Backend {
   getLastRun(ownerId: string, storeId: string): Promise<Run | null>;
   createRun(ownerId: string, input: CreateRunInput): Promise<Run>;
   submitRun(ownerId: string, input: SubmitRunInput): Promise<Run>;
+  printRun(ownerId: string, runId: string): Promise<Run | null>;
   unlockRun(ownerId: string, runId: string): Promise<void>;
   deleteRun(ownerId: string, runId: string): Promise<void>;
+
+  // audit
+  getAuditLogs(ownerId: string, limit?: number): Promise<AuditLog[]>;
 }
